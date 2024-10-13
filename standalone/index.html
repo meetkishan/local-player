@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Music Streamer P2P</title>
+  </head>
+  <body>
+    <h1>Music Streamer</h1>
+    <input type="file" id="file-input" accept="audio/*" />
+    <p>Paste the Peer ID of the other device:</p>
+    <input type="text" id="peer-id-input" />
+    <button id="connect-btn">Connect</button>
+
+    <h2>Music Player</h2>
+    <audio id="audio-player" controls></audio>
+
+    <script src="https://cdn.jsdelivr.net/npm/peerjs@1.3.2/dist/peerjs.min.js"></script>
+    <script>
+      const peer = new Peer(); // Create a new PeerJS instance
+
+      peer.on("open", (id) => {
+        console.log("My peer ID is: " + id);
+        alert("Your Peer ID: " + id); // Share this ID with the other peer
+      });
+
+      peer.on("connection", (conn) => {
+        console.log("Connected to peer!");
+        conn.on("data", (data) => {
+          console.log("Getting chunks");
+          if (data.type === "file") {
+            // Create a blob from the received data and play it
+            const blob = new Blob([data.chunk], { type: data.mime });
+            const url = URL.createObjectURL(blob);
+            const audioPlayer = document.getElementById("audio-player");
+            audioPlayer.src = url;
+            // audioPlayer.play();
+          }
+        });
+      });
+
+      // Connect to another peer
+      document.getElementById("connect-btn").addEventListener("click", () => {
+        const otherPeerId = document.getElementById("peer-id-input").value;
+        const conn = peer.connect(otherPeerId);
+
+        // Send the music file when connected
+        conn.on("open", () => {
+          document
+            .getElementById("file-input")
+            .addEventListener("change", function (event) {
+              const files = event.target.files;
+              if (files.length > 0) {
+                const musicFile = files[0];
+                const chunkSize = 64 * 1024; // 64KB per chunk
+                let offset = 0;
+
+                function sendChunk() {
+                  const fileReader = new FileReader();
+                  const blob = musicFile.slice(offset, offset + chunkSize);
+                  fileReader.onload = function (event) {
+                    if (event.target.result) {
+                      conn.send({
+                        type: "file",
+                        chunk: event.target.result,
+                        mime: musicFile.type,
+                      });
+                      offset += chunkSize;
+                      if (offset < musicFile.size) {
+                        sendChunk(); // Continue sending the file
+                      }
+                    }
+                  };
+                  fileReader.readAsArrayBuffer(blob);
+                }
+
+                sendChunk(); // Start sending the file in chunks
+              }
+            });
+        });
+      });
+    </script>
+  </body>
+</html>
